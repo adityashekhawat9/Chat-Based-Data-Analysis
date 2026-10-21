@@ -200,14 +200,22 @@ Instead of generic bullet points or raw markdown text, responses are displayed i
 ---
 
 ### 3.2 Environment Variables Configuration
-Create a `.env` file in the project root:
+A template configuration file [`.env.example`](.env.example) is provided in the repository root containing all required keys. Create your local environment file by copying the template:
 
 ```bash
-# LLM Provider Configuration
+cp .env.example .env
+```
+
+Populate `.env` with your API credentials and configurations:
+
+```bash
+# Groq API Configuration (obtain from https://console.groq.com/keys)
 GROQ_API_KEY="your-groq-api-key-here"
+
+# LLM Model Selection (Recommended: openai/gpt-oss-120b)
 GROQ_MODEL="openai/gpt-oss-120b"
 
-# Storage Configuration
+# Local Storage Directory for DuckDB Catalogs & Chunked Uploads
 DATA_DIR="data"
 ```
 
