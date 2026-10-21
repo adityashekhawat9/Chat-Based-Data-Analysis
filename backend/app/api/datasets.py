@@ -12,6 +12,8 @@ from backend.app.models.dataset import (
     RegisterDatasetRequest,
     RegisteredDatasetResponse,
     SessionDatasetsResponse,
+    BatchRegisterRequest,
+    BatchRegisterResponse,
 )
 from backend.app.models.upload import (
     UploadInitRequest,
@@ -293,6 +295,36 @@ def register_dataset(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Registration failed: {str(e)}"
         )
+
+@router.post("/register-batch", response_model=BatchRegisterResponse, status_code=status.HTTP_200_OK)
+def register_batch_datasets(
+    req: BatchRegisterRequest,
+    tenant_id: str = Depends(get_current_tenant),
+):
+    """
+    Registers a batch of staged datasets into the tenant's persistent DuckDB catalog.
+    Processes each staged dataset sequentially to ensure safe catalog updates.
+    """
+    registered_list: List[RegisteredDatasetResponse] = []
+    errors_list: List[dict] = []
+
+    for item in req.items:
+        try:
+            registered = registry.register_staged_dataset(
+                session_id=item.session_id,
+                content_hash=item.content_hash,
+                table_name=item.table_name,
+                tenant_id=tenant_id,
+            )
+            registered_list.append(registered)
+        except Exception as e:
+            errors_list.append({
+                "content_hash": item.content_hash,
+                "table_name": item.table_name,
+                "error": str(e),
+            })
+
+    return BatchRegisterResponse(registered=registered_list, errors=errors_list)
 
 @router.get("/sessions/{session_id}", response_model=SessionDatasetsResponse)
 def get_session_datasets(

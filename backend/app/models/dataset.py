@@ -76,3 +76,15 @@ class RegisteredDatasetResponse(BaseModel):
 class SessionDatasetsResponse(BaseModel):
     session_id: str
     datasets: List[RegisteredDatasetResponse] = Field(default_factory=list)
+
+class BatchRegisterItem(BaseModel):
+    session_id: str
+    content_hash: str
+    table_name: Optional[str] = None
+
+class BatchRegisterRequest(BaseModel):
+    items: List[BatchRegisterItem]
+
+class BatchRegisterResponse(BaseModel):
+    registered: List[RegisteredDatasetResponse] = Field(default_factory=list)
+    errors: List[Dict[str, Any]] = Field(default_factory=list)

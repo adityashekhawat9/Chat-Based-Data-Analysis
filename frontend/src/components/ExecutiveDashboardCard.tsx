@@ -7,20 +7,10 @@ import {
   Package,
   CheckCircle2,
   BarChart3,
-  Layers,
   Sparkles,
-  Terminal,
-  Clock,
   Table as TableIcon,
-  ChevronDown,
-  ChevronUp,
-  Copy,
-  Check,
   ShieldCheck,
-  ArrowRight,
   Lightbulb,
-  Building2,
-  Calendar,
   AlertCircle,
 } from "lucide-react";
 import { MessageItem } from "@/types/chat";
@@ -122,10 +112,7 @@ export function renderCleanFormattedText(rawText: string): React.ReactNode {
 
 export default function ExecutiveDashboardCard({
   message,
-  onCopySQL,
-  copiedId,
 }: Props) {
-  const [isTraceExpanded, setIsTraceExpanded] = useState(false);
   const [isGroundingExpanded, setIsGroundingExpanded] = useState(false);
 
   // Parse narrative content into structured executive components
@@ -479,35 +466,6 @@ export default function ExecutiveDashboardCard({
           </div>
         )}
 
-        {/* Section 3: Strategic Insights & Key Takeaways */}
-        {parsed.insights.length > 0 && (
-          <div className="space-y-2">
-            <div className="text-[11px] font-mono uppercase text-slate-400 font-medium tracking-wider mb-2 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> Analytical Takeaways &amp; Breakdown
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {parsed.insights.map((insight, idx) => (
-                <div
-                  key={idx}
-                  className="bg-slate-950/50 border border-slate-800/80 rounded-xl p-3.5 flex items-start gap-3 text-xs"
-                >
-                  <div className="p-1 rounded-md bg-sky-500/10 border border-sky-500/20 text-sky-400 flex-shrink-0 mt-0.5">
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="space-y-0.5">
-                    <span className="font-semibold text-slate-200 block">
-                      {renderCleanFormattedText(insight.title)}
-                    </span>
-                    <p className="text-slate-300 leading-relaxed font-normal">
-                      {renderCleanFormattedText(insight.body)}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Section 4: Structured Tabular Breakdown */}
         {parsed.table && (
@@ -671,112 +629,6 @@ export default function ExecutiveDashboardCard({
           </div>
         )}
 
-        {/* Section 7: Audit & SQL Inspection Drawer */}
-        {message.sql_query && (
-          <div className="pt-2 border-t border-slate-800/70">
-            <button
-              onClick={() => setIsTraceExpanded(!isTraceExpanded)}
-              className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1.5 transition font-medium"
-            >
-              <Terminal className="w-3.5 h-3.5" />
-              {isTraceExpanded
-                ? "Hide SQL & Execution Trace"
-                : "Inspect SQL & Deterministic Execution Trace"}
-              {isTraceExpanded ? (
-                <ChevronUp className="w-3.5 h-3.5" />
-              ) : (
-                <ChevronDown className="w-3.5 h-3.5" />
-              )}
-            </button>
-
-            {isTraceExpanded && (
-              <div className="mt-3 space-y-3 bg-slate-950/90 border border-slate-800 p-4 rounded-xl text-xs">
-                {/* Execution Metrics Bar */}
-                {message.metrics && (
-                  <div className="flex flex-wrap items-center gap-4 text-slate-400 border-b border-slate-800 pb-2">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-blue-400" />
-                      Runtime: <strong>{message.metrics.execution_time_ms} ms</strong>
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <TableIcon className="w-3.5 h-3.5 text-purple-400" />
-                      Rows: <strong>{message.metrics.row_count}</strong>
-                    </span>
-                    {message.metrics.tables_used.length > 0 && (
-                      <span className="flex items-center gap-1">
-                        <Layers className="w-3.5 h-3.5 text-emerald-400" />
-                        Tables: <strong>{message.metrics.tables_used.join(", ")}</strong>
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                {/* SQL Code Block */}
-                <div className="relative group">
-                  <div className="flex items-center justify-between text-slate-400 mb-1">
-                    <span className="font-mono text-[11px] text-slate-500 uppercase">
-                      DuckDB SQL
-                    </span>
-                    {onCopySQL && (
-                      <button
-                        onClick={() => onCopySQL(message.sql_query!, message.id)}
-                        className="text-slate-400 hover:text-slate-200 transition flex items-center gap-1 text-[11px]"
-                      >
-                        {copiedId === message.id ? (
-                          <>
-                            <Check className="w-3 h-3 text-emerald-400" /> Copied
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3 h-3" /> Copy SQL
-                          </>
-                        )}
-                      </button>
-                    )}
-                  </div>
-                  <pre className="bg-slate-900 border border-slate-800/80 rounded-lg p-3 overflow-x-auto text-[11px] font-mono text-sky-300">
-                    {message.sql_query}
-                  </pre>
-                </div>
-
-                {/* Raw Data Preview Table */}
-                {message.data_preview && message.data_preview.length > 0 && (
-                  <div>
-                    <span className="font-mono text-[11px] text-slate-500 uppercase block mb-1">
-                      Data Preview ({message.data_preview.length} rows)
-                    </span>
-                    <div className="max-h-48 overflow-y-auto border border-slate-800 rounded-lg">
-                      <table className="w-full text-left text-[11px] border-collapse">
-                        <thead className="bg-slate-900 text-slate-400 sticky top-0">
-                          <tr>
-                            {Object.keys(message.data_preview[0]).map((k) => (
-                              <th key={k} className="py-1.5 px-2.5 border-b border-slate-800">
-                                {k}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-800/60 bg-slate-950/40">
-                          {message.data_preview.slice(0, 15).map((row, rIdx) => (
-                            <tr key={rIdx} className="hover:bg-slate-800/20">
-                              {Object.values(row).map((val: any, cIdx) => (
-                                <td key={cIdx} className="py-1.5 px-2.5 text-slate-300">
-                                  {typeof val === "number"
-                                    ? val.toLocaleString(undefined, { maximumFractionDigits: 2 })
-                                    : String(val)}
-                                </td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

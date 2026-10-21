@@ -92,3 +92,92 @@ sequenceDiagram
 | `DUPLICATE_ROWS` | **WARNING** | Row matches another row across all fields. | Verify if duplicate records should be deduplicated. |
 | `HIGH_MISSING_RATE` | **WARNING** | Column has >20% missing values. | Queries filtering on this column may drop significant data. |
 | `MIXED_TYPES` | **WARNING** | Column contains values of conflicting types. | Verify consistency of data entries. |
+
+---
+
+## 4. Multi-File Selection & Batch Upload Queue Architecture
+
+To support seamless ingestion of multi-table analytical schemas (e.g. 8 related ecommerce tables), the system incorporates a visual batch upload queue engine with sequential execution guarantees.
+
+### 4.1 Ingestion Flow & Concurrency Model
+
+```mermaid
+stateDiagram-v2
+    [*] --> Queued: Multi-File Select / Drop
+    Queued --> Uploading: Sequential Processor Triggered
+    Uploading --> Validating: Chunks Assembled / Direct Post
+    Validating --> Validated: Validation Passed / Warnings
+    Validating --> Blocked: Blocking Errors Detected
+    Validating --> Failed: Network / Server Error
+    Uploading --> Failed: Interrupted Upload
+    Failed --> Queued: Retry Item / Retry All
+    Validated --> Registering: "Register Single" or "Register All"
+    Registering --> Registered: Table Ingested into DuckDB Catalog
+    Registered --> [*]: Clear Completed
+```
+
+### 4.2 Architecture Guarantees
+
+1. **Sequential Queue Processing & DuckDB Lock Safety:**
+   - Files are validated and registered sequentially in queue order.
+   - DuckDB tenant databases enforce single-writer locks on disk (`catalog.duckdb`). By processing batch items sequentially, the system completely prevents lock contention (`Conflicting lock is held`) and race conditions.
+
+2. **Adaptive File Handling (Direct vs. Multipart Resumable):**
+   - **Files &le; 5 MB:** Streamed directly to `/api/datasets/validate` in a single multipart request for instantaneous schema profiling.
+   - **Files &gt; 5 MB:** Split into 5 MB chunks, tracked by manifest on disk (`/api/datasets/upload/init`, `/api/datasets/upload/chunk`), verified via SHA-256 upon assembly (`/api/datasets/upload/complete`), and resilient to network dropouts with chunk-level pause and resume.
+
+3. **TOCTOU Safety & Idempotency:**
+   - Every file's raw byte stream is hashed (SHA-256) upon validation and staged in a secure session cache.
+   - When registering—either individually or via bulk `/api/datasets/register-batch`—the registry matches the client-submitted `content_hash` against staged bytes before committing to DuckDB, ensuring no byte-tampering can occur between validation and catalog registration.
+   - If a byte-identical file is uploaded repeatedly or across multiple queue entries, idempotency detection returns the existing registration without duplicating table storage.
+
+---
+
+## 5. Batch Ingestion API Reference
+
+### `POST /api/datasets/register-batch`
+
+Registers a batch of pre-validated, staged datasets into the tenant's persistent DuckDB catalog in a single atomic transaction.
+
+**Headers:**
+- `Content-Type: application/json`
+- `X-Tenant-ID: <tenant_id>`
+
+**Request Body (`BatchRegisterRequest`):**
+```json
+{
+  "items": [
+    {
+      "session_id": "sess_ecommerce_2024",
+      "content_hash": "a1b2c3d4e5f6...",
+      "table_name": "orders"
+    },
+    {
+      "session_id": "sess_ecommerce_2024",
+      "content_hash": "9f8e7d6c5b4a...",
+      "table_name": "products"
+    }
+  ]
+}
+```
+
+**Response (`200 OK` - `BatchRegisterResponse`):**
+```json
+{
+  "registered": [
+    {
+      "dataset_id": "ds_550e8400-e29b-41d4-a716-446655440000",
+      "session_id": "sess_ecommerce_2024",
+      "table_name": "orders",
+      "filename": "orders.csv",
+      "content_hash": "a1b2c3d4e5f6...",
+      "row_count": 50000,
+      "column_count": 12,
+      "registered_at": "2026-10-21T14:30:00Z",
+      "columns": ["order_id", "customer_id", "order_date", "total_amount"]
+    }
+  ],
+  "errors": []
+}
+```
+

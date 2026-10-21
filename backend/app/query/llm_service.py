@@ -162,13 +162,14 @@ class LLMService:
             return self._heuristic_sql_fallback(user_message, catalog_schema)
 
     def _execute_to_records(self, conn: duckdb.DuckDBPyConnection, sql: str) -> List[Dict[str, Any]]:
-
         cursor = conn.execute(sql)
         if not cursor.description:
             return []
         col_names = [d[0] for d in cursor.description]
-        rows = cursor.fetchall()
+        # Bounded fetch to safeguard against OOM on massive result sets
+        rows = cursor.fetchmany(1001)
         return [dict(zip(col_names, row)) for row in rows]
+
 
     def _execute_with_retry(
         self,

@@ -51,3 +51,49 @@ export interface SessionDatasetsResponse {
   session_id: string;
   datasets: RegisteredDataset[];
 }
+
+export interface BatchRegisterItem {
+  session_id: string;
+  content_hash: string;
+  table_name?: string;
+}
+
+export interface BatchRegisterRequest {
+  items: BatchRegisterItem[];
+}
+
+export interface BatchRegisterResponse {
+  registered: RegisteredDataset[];
+  errors: Array<{ content_hash?: string; table_name?: string; error: string }>;
+}
+
+export type BatchItemStatus =
+  | "queued"
+  | "uploading"
+  | "validating"
+  | "validated"
+  | "blocked"
+  | "registering"
+  | "registered"
+  | "failed";
+
+export interface BatchQueueItem {
+  id: string;
+  file: File;
+  name: string;
+  size: number;
+  status: BatchItemStatus;
+  progressPercent: number;
+  chunkProgress?: {
+    current: number;
+    total: number;
+    uploadedChunks: number[];
+    uploadId?: string;
+    isPaused?: boolean;
+  };
+  validationResult?: ValidationResponse;
+  registeredDataset?: RegisteredDataset;
+  errorMessage?: string;
+  customTableName?: string;
+}
+

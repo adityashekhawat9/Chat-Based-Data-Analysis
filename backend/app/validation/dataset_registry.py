@@ -309,21 +309,58 @@ class DatasetRegistry:
     ) -> duckdb.DuckDBPyConnection:
         return self.get_tenant_duckdb(tenant_id)
 
+    SQL_RESERVED_KEYWORDS = {
+        "select", "from", "where", "table", "order", "group", "by", "having",
+        "limit", "offset", "join", "inner", "outer", "left", "right", "full",
+        "cross", "on", "as", "with", "union", "all", "distinct", "into", "values",
+        "case", "when", "then", "else", "end", "and", "or", "not", "in", "is",
+        "null", "like", "between", "exists", "user", "database", "schema",
+        "primary", "foreign", "key", "check", "default", "index", "view",
+        "column", "row", "count", "sum", "avg", "min", "max", "desc", "asc"
+    }
+
     def _resolve_table_name(self, tenant_id: str, session_id: str, candidate_name: str) -> str:
+        # Strip extension and sanitize to alphanumeric + underscores
         name = candidate_name.rsplit(".", 1)[0]
         name = re.sub(r"[^\w]", "_", name).strip().lower()
-        name = re.sub(r"_+", "_", name)
-        if not name or name[0].isdigit():
-            name = f"tbl_{name}"
+        name = re.sub(r"_+", "_", name).strip("_")
 
-        existing_names = {
-            ds.table_name
+        # Fallback if empty, starts with a digit, or is a reserved SQL keyword
+        if (
+            not name
+            or name[0].isdigit()
+            or name in self.SQL_RESERVED_KEYWORDS
+            or name.startswith(("sqlite_", "duckdb_", "information_schema"))
+        ):
+            name = f"tbl_{name}" if name else "tbl_dataset"
+
+        name = name[:60]
+
+        # Check existing metadata catalog for this tenant
+        existing_tables_by_session = {
+            ds.table_name: ds.session_id
             for ds in self._registered.values()
             if ds.tenant_id == tenant_id
         }
+
+        # Check physical tables currently mounted in tenant DuckDB
+        conn = self.get_tenant_duckdb(tenant_id)
+        try:
+            physical_tables = {row[0].lower() for row in conn.execute("SHOW TABLES").fetchall()}
+        except Exception:
+            physical_tables = set()
+
         final_name = name
         suffix = 1
-        while final_name in existing_names:
+        while (
+            final_name in existing_tables_by_session
+            and existing_tables_by_session[final_name] != session_id
+        ) or (
+            final_name in physical_tables
+            and final_name not in existing_tables_by_session
+        ):
             final_name = f"{name}_{suffix}"
             suffix += 1
+
         return final_name
+

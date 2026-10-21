@@ -47,6 +47,27 @@
 - [x] Comprehensive `README.md` update covering setup, architecture, security guardrails, multi-tenancy, and evaluation.
 - [x] Verify complete test suite (42 passed, 0 failed in 57.2s).
 
+### Milestone 8: Multi-File Selection & Batch Upload Queue
+- [x] Multi-file selection (`<input multiple />`) and batch drag-and-drop ingestion (`CsvUploader.tsx`).
+- [x] Visual batch ingestion queue dashboard with per-item progress, status pills (`queued`, `uploading`, `validating`, `validated`, `blocked`, `registering`, `registered`, `failed`), and retry/inspection controls.
+- [x] Backend batch registration endpoint (`POST /api/datasets/register-batch`) with TOCTOU content hash verification and atomic catalog commit.
+- [x] Sequential queue processor preventing DuckDB single-writer file lock contention (`Conflicting lock is held`).
+- [x] Full documentation update in `implementation.md` (Sections 4 & 5).
+
+### Milestone 9: Real-World Break Vectors Hardening & Comprehensive Testing
+- [x] **Break Vector 1: Filesystem Exfiltration Defense:** Block DuckDB file table functions (`read_csv`, `read_text`, `read_parquet`, `read_json`, `glob`, `scan_*`) and direct filesystem path queries in `SQLGuardrails`.
+- [x] **Break Vector 2: Quote-Aware Semicolon Parsing:** Eliminate false-positive query rejections on valid data filters containing semicolons or keywords within quotes (`'...'` or `"..."`).
+- [x] **Break Vector 3: Memory Exhaustion & Result Clamping:** Hard clamp queries with excessive limits (down to `MAX_RESULT_LIMIT = 1000`), enforce limits on `GROUP BY` queries, and use bounded `cursor.fetchmany(1001)` in `llm_service.py` to prevent OOM.
+- [x] **Break Vector 4: Comprehensive Ingestion Security:** Expand `csv.field_size_limit(sys.maxsize)` and scan the complete file stream for script tags (`<script>`) and formula commands (`=cmd|...`) past row 500.
+- [x] **Break Vector 5: Table Name Sanitization & Cross-Session Overwrite Prevention:** Sanitize candidate table names, prefix SQL reserved keywords (`order`, `group`, `user`), and auto-disambiguate table names across sessions to prevent silent table overwrites.
+- [x] **Automated Test Suite:** Created `tests/test_break_vectors.py` with 14 targeted unit/integration tests covering all 5 break vectors (all passed).
+
+### Milestone 10: UI Streamlining & Non-Breaking Content Refinement
+- [x] Removed **Analytical Takeaways & Breakdown** cards section from `frontend/src/components/ExecutiveDashboardCard.tsx` (previously Section 3).
+- [x] Removed **Hide SQL & Execution Trace** drawer section from `frontend/src/components/ExecutiveDashboardCard.tsx` (previously Section 7).
+- [x] Removed floating **Jump to latest** button and scroll handlers from `frontend/src/components/ChatInterface.tsx` to eliminate UI obstruction and overlap.
+- [x] Verified zero breakage of Executive Overview, KPI cards, Tabular Breakdown, dynamic Recharts chart, Grounding badges, TypeScript types, and Next.js production build (`npm run build`).
+
 ---
 
 ## Executed Verification & Test Status
@@ -97,7 +118,22 @@
   40. `test_identifier_normalization` (PASSED)
   41. `test_mutation_intent_regex_coverage` (PASSED)
   42. `test_api_chat_returns_polite_refusal_for_mutations` (PASSED)
+  43. `test_break_vector_1_read_csv_table_function_blocked` (PASSED)
+  44. `test_break_vector_1_read_text_and_glob_blocked` (PASSED)
+  45. `test_break_vector_2_semicolon_inside_string_literal_allowed` (PASSED)
+  46. `test_break_vector_2_mutating_keyword_inside_string_literal_allowed` (PASSED)
+  47. `test_break_vector_2_actual_multiple_statements_still_blocked` (PASSED)
+  48. `test_break_vector_3_massive_limit_clamped` (PASSED)
+  49. `test_break_vector_3_group_by_auto_limit` (PASSED)
+  50. `test_break_vector_3_scalar_count_preserved` (PASSED)
+  51. `test_break_vector_3_fetchmany_bounds_memory` (PASSED)
+  52. `test_break_vector_4_script_injection_on_row_501_blocked` (PASSED)
+  53. `test_break_vector_4_formula_injection_on_row_600_blocked` (PASSED)
+  54. `test_break_vector_4_large_csv_field_does_not_crash` (PASSED)
+  55. `test_break_vector_5_reserved_sql_keywords_sanitized` (PASSED)
+  56. `test_break_vector_5_cross_session_table_overwrite_prevented` (PASSED)
 
 ### Frontend Production Build
 - **Command:** `npm run build` in `frontend/`
-- **Result:** **Compiled successfully** in 2.4s (0 lint errors, 0 type errors, static pages generated).
+- **Result:** **Compiled successfully** in 1.8s (0 lint errors, 0 type errors, static pages generated).
+

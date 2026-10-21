@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   Send,
   Bot,
@@ -59,14 +59,19 @@ export default function ChatInterface({
 
   const { isStreaming, currentStep, streamQuery } = useChatStream();
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const latestExchangeRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  // Smoothly anchor view to the TOP of the current exchange so user can read from word one
+  const scrollToCurrentExchangeTop = useCallback(() => {
+    if (latestExchangeRef.current) {
+      latestExchangeRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
+  }, []);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, isStreaming, currentStep]);
 
   const handleSendMessage = async (queryText?: string) => {
     const text = queryText || inputValue;
@@ -96,6 +101,11 @@ export default function ChatInterface({
 
     setMessages((prev) => [...prev, userMsg, initialAssistantMsg]);
     if (!queryText) setInputValue("");
+
+    // Anchor viewport to top of this new exchange once rendered
+    setTimeout(() => {
+      scrollToCurrentExchangeTop();
+    }, 60);
 
     const historyPayload = messages.slice(-4).map((m) => ({
       role: m.role,
@@ -143,7 +153,7 @@ export default function ChatInterface({
   };
 
   return (
-    <div className="flex flex-col h-[760px] bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+    <div className="flex flex-col h-[760px] bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl relative">
       {/* Live Stream Pipeline Stage Bar */}
       {isStreaming && currentStep && (
         <div className="bg-gradient-to-r from-blue-900/60 via-indigo-950/60 to-slate-900/60 border-b border-blue-500/30 px-4 py-2.5 flex items-center justify-between text-xs text-blue-200 backdrop-blur transition-all">
@@ -158,7 +168,10 @@ export default function ChatInterface({
       )}
 
       {/* Messages Scroll Area */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 scroll-smooth"
+      >
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center max-w-lg mx-auto py-12 space-y-4">
             <div className="p-3 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-2xl">
@@ -209,43 +222,51 @@ export default function ChatInterface({
             </div>
           </div>
         ) : (
-          messages.map((msg) => (
-            <div key={msg.id} className="w-full">
-              {msg.role === "user" ? (
-                /* User Prompt Bubble */
-                <div className="flex gap-3 justify-end mb-4">
-                  <div className="max-w-xl rounded-2xl p-4 text-sm bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-br-none shadow-lg shadow-blue-600/20">
-                    <div className="flex items-center justify-between text-xs opacity-75 mb-1.5">
-                      <span className="font-semibold">You</span>
-                      <span className="font-mono text-[11px]">{msg.timestamp}</span>
+          (() => {
+            const lastUserMessageId = messages.filter((m) => m.role === "user").slice(-1)[0]?.id;
+            return messages.map((msg) => (
+              <div
+                key={msg.id}
+                ref={msg.id === lastUserMessageId ? latestExchangeRef : null}
+                className="w-full"
+              >
+                {msg.role === "user" ? (
+                  /* User Prompt Bubble */
+                  <div className="flex gap-3 justify-end mb-4">
+                    <div className="max-w-xl rounded-2xl p-4 text-sm bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-br-none shadow-lg shadow-blue-600/20">
+                      <div className="flex items-center justify-between text-xs opacity-75 mb-1.5">
+                        <span className="font-semibold">You</span>
+                        <span className="font-mono text-[11px]">{msg.timestamp}</span>
+                      </div>
+                      <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
                     </div>
-                    <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+                    <div className="w-8 h-8 rounded-full bg-slate-700 border border-slate-600 flex items-center justify-center text-slate-300 flex-shrink-0 mt-1">
+                      <User className="w-4 h-4" />
+                    </div>
                   </div>
-                  <div className="w-8 h-8 rounded-full bg-slate-700 border border-slate-600 flex items-center justify-center text-slate-300 flex-shrink-0 mt-1">
-                    <User className="w-4 h-4" />
+                ) : (
+                  /* Executive Dashboard Card for Assistant Response */
+                  <div className="flex gap-3 justify-start mb-6">
+                    <div className="w-8 h-8 rounded-full bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 flex-shrink-0 mt-2">
+                      <Bot className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 max-w-4xl">
+                      <ExecutiveDashboardCard
+                        message={msg}
+                        onCopySQL={handleCopySQL}
+                        copiedId={copiedId}
+                      />
+                    </div>
                   </div>
-                </div>
-              ) : (
-                /* Executive Dashboard Card for Assistant Response */
-                <div className="flex gap-3 justify-start mb-6">
-                  <div className="w-8 h-8 rounded-full bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 flex-shrink-0 mt-2">
-                    <Bot className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 max-w-4xl">
-                    <ExecutiveDashboardCard
-                      message={msg}
-                      onCopySQL={handleCopySQL}
-                      copiedId={copiedId}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          ))
+                )}
+              </div>
+            ));
+          })()
         )}
 
         <div ref={messagesEndRef} />
       </div>
+
 
       {/* Input Bar */}
       <div className="border-t border-slate-800 bg-slate-900/80 p-3 sm:p-4">

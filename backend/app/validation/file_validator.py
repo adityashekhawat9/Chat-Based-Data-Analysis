@@ -1,16 +1,23 @@
 import csv
 import io
 import re
+import sys
 from typing import List, Tuple, Optional
 from backend.app.models.dataset import ValidationIssue, Severity, IssueCode
+
+# Configure CSV field size limit to handle large text columns without throwing 500 error
+try:
+    csv.field_size_limit(sys.maxsize)
+except OverflowError:
+    csv.field_size_limit(2147483647)
 
 # Maximum file size: 1GB (supports large multi-chunk datasets)
 MAX_FILE_SIZE = 1024 * 1024 * 1024
 
-
 # Dangerous patterns for formula/script injection
 SCRIPT_TAG_REGEX = re.compile(r"<\s*script[^>]*>|javascript:|vbscript:|<\s*iframe[^>]*>", re.IGNORECASE)
 FORMULA_INJECTION_REGEX = re.compile(r"^[\=\+\-\@\t\r](?:\s*cmd|\s*powershell|\s*calc|.*DDE|.*EXEC)", re.IGNORECASE)
+FORMULA_GLOBAL_REGEX = re.compile(r"(?:^|[\r\n,;\t])\s*[\=\+\-\@\t\r](?:\s*cmd|\s*powershell|\s*calc|.*DDE|.*EXEC)", re.IGNORECASE)
 
 class FileValidationResult:
     def __init__(
@@ -119,8 +126,8 @@ class FileValidator:
             )
             return FileValidationResult(is_valid=False, issues=issues)
 
-        # 5. Check for script injection or dangerous formula execution
-        injection_issues = self._check_script_injection(raw_rows)
+        # 5. Check for script injection or dangerous formula execution across full file
+        injection_issues = self._check_script_injection(raw_rows, decoded_text)
         issues.extend(injection_issues)
 
         has_blocking = any(issue.severity == Severity.BLOCKING for issue in issues)
@@ -142,10 +149,47 @@ class FileValidator:
                 continue
         return None, ""
 
-    def _check_script_injection(self, raw_rows: List[List[str]]) -> List[ValidationIssue]:
+    def _check_script_injection(
+        self, raw_rows: List[List[str]], decoded_text: str = ""
+    ) -> List[ValidationIssue]:
         issues = []
-        # Inspect up to the first 500 rows for performance and safety
-        for row_idx, row in enumerate(raw_rows[:500]):
+
+        # Fast global check across entire decoded text to guarantee zero row-limit blind spots
+        if decoded_text:
+            if SCRIPT_TAG_REGEX.search(decoded_text):
+                issues.append(
+                    ValidationIssue(
+                        code=IssueCode.SCRIPT_INJECTION_RISK.value,
+                        severity=Severity.BLOCKING,
+                        message="Potentially dangerous script or iframe tag detected in dataset content.",
+                        affected_count=1,
+                        recommended_action="Remove embedded HTML/JavaScript tags from data fields."
+                    )
+                )
+                return issues
+
+            if FORMULA_GLOBAL_REGEX.search(decoded_text):
+                issues.append(
+                    ValidationIssue(
+                        code=IssueCode.SCRIPT_INJECTION_RISK.value,
+                        severity=Severity.BLOCKING,
+                        message="Executable spreadsheet formula command detected in dataset content.",
+                        affected_count=1,
+                        recommended_action="Sanitize spreadsheet formula prefixes before uploading."
+                    )
+                )
+                return issues
+
+        # Granular row-by-row inspection with wide window
+        total_rows = len(raw_rows)
+        # Inspect all rows up to 10,000; if larger, inspect head and tail chunks
+        if total_rows <= 10000:
+            inspect_indices = range(total_rows)
+        else:
+            inspect_indices = list(range(5000)) + list(range(total_rows - 5000, total_rows))
+
+        for row_idx in inspect_indices:
+            row = raw_rows[row_idx]
             for col_idx, cell in enumerate(row):
                 val = cell.strip()
                 if not val:
@@ -161,7 +205,7 @@ class FileValidator:
                             recommended_action="Remove embedded HTML/JavaScript tags from data fields."
                         )
                     )
-                    return issues  # Return early on blocking security risk
+                    return issues
 
                 # Check executable formula injection
                 if FORMULA_INJECTION_REGEX.search(val):
@@ -176,3 +220,4 @@ class FileValidator:
                     )
                     return issues
         return issues
+
