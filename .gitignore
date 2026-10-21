@@ -1,0 +1,55 @@
+# Dependencies & Virtual Environments
+.venv/
+venv/
+env/
+node_modules/
+
+# Environment variables & secrets
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# Data directories (sensitive or large mock datasets)
+data/Online Shop 2024/
+data/uploads/
+data/staged/
+data/tenants/
+*.duckdb
+*.duckdb.wal
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Tests folder
+tests/
+backend/tests/
+
+
+# Next.js build output
+.next/
+out/
+build/
+*.tsbuildinfo
+next-env.d.ts
+
+# OS & IDE files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.idea/
+.vscode/
