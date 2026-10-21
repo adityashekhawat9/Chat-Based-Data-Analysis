@@ -1,7 +1,7 @@
 # PRD.md - Product Requirements Document
 
 ## 1. Product Overview
-The **Innowhyte Data Analysis Chat** is a web-based analytical platform enabling business analysts, managers, and non-technical stakeholders to upload multiple CSV datasets, inspect data hygiene, and explore insights through a natural language conversational interface. The system delivers mathematically accurate responses paired with dynamic visualizations (charts/graphs) and transparent audit traces.
+The **Conversational Data Analysis Chat** is a web-based analytical platform enabling business analysts, managers, and non-technical stakeholders to upload multiple CSV datasets, inspect data hygiene, and explore insights through a natural language conversational interface. The system delivers mathematically accurate responses paired with dynamic visualizations (charts/graphs) and transparent audit traces.
 
 ---
 

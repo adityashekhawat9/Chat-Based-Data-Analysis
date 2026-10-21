@@ -1,6 +1,6 @@
 # Chat-Based-Data-Analysis
 
-### Innowhyte Conversational Data Analysis Platform
+### Conversational Data Analysis Platform
 
 An enterprise-grade, conversational data analysis application that allows business stakeholders and data analysts to upload multiple CSV datasets, inspect schema health and hygiene, and explore insights through a natural language interface with grounded narratives, Server-Sent Events (SSE) streaming, executive dashboard visualizations, and strict read-only security guardrails.
 
@@ -10,7 +10,7 @@ An enterprise-grade, conversational data analysis application that allows busine
 1. [The Problem Statement](#1-the-problem-statement)
    - [Context & Business Need](#11-context--business-need)
    - [Three Fatal Flaws of Traditional Solutions](#12-three-fatal-flaws-of-traditional-solutions)
-   - [The Innowhyte Solution: Deterministic Numerical Analysis](#13-the-innowhyte-solution-deterministic-numerical-analysis)
+   - [The Deterministic Solution: Numerical Analysis & Guardrails](#13-the-deterministic-solution-numerical-analysis--guardrails)
 2. [How the System Works](#2-how-the-system-works)
    - [High-Level Architecture Diagram](#21-high-level-architecture-diagram)
    - [Subsystem 1: Resumable Chunked Multipart Ingestion](#22-subsystem-1-resumable-chunked-multipart-ingestion)
@@ -60,8 +60,8 @@ Most off-the-shelf "chat-with-data" implementations fall into one of three traps
 3. **Cluttered Markdown & Unformatted Output (User Friction):**
    Standard chat interfaces output raw markdown text, cluttered with unparsed asterisks (`**bold**`), raw pipe tables (`| Col1 | Col2 |`), and harsh database exception stack traces. When users prompt for actions outside the application scope (e.g. asking to delete or edit records), traditional bots either fail with cryptic syntax errors or return mutating code instructions.
 
-### 1.3 The Innowhyte Solution: Deterministic Numerical Analysis
-The Innowhyte platform enforces a strict separation of concerns:
+### 1.3 The Deterministic Solution: Numerical Analysis & Guardrails
+The platform enforces a strict separation of concerns:
 - **Zero Arbitrary Code Execution:** Zero Python `exec()` or `eval()`. All analytical calculations are performed inside an embedded, vectorized relational engine (**DuckDB**) using strictly validated, read-only ANSI-SQL (`SELECT` and `WITH` only).
 - **100% Deterministic Grounding:** The LLM (Groq `openai/gpt-oss-120b`) is utilized exclusively for semantic query planning (mapping natural language questions to SQL) and grounded narrative summarization. Every figure, percentage, or currency amount cited in the output is cross-referenced against raw DuckDB query results.
 - **Strict Read-Only Guardrails & Polite Intent Interception:** Mutating actions (`DELETE`, `DROP`, `TRUNCATE`, `ALTER`, `UPDATE`, `EDIT`, `REMOVE`, `INSERT`) are intercepted before reaching the database, returning a polite apology and helpful guidance on read-only analytical views.

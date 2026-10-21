@@ -1,1 +1,1 @@
-# Innowhyte backend package
+# Backend package

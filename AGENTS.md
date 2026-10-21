@@ -1,6 +1,6 @@
 # AGENTS.md - Developer & Agent Operating Guidelines
 
-This document governs the engineering standards, safety guardrails, and architectural conventions for developers and autonomous agents working on the Innowhyte Data Analysis Chat application.
+This document governs the engineering standards, safety guardrails, and architectural conventions for developers and autonomous agents working on the Conversational Data Analysis Chat application.
 
 ## 1. Core Operating Principles
 

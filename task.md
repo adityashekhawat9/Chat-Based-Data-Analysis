@@ -1,6 +1,6 @@
 # Task Checklist & Progress Log
 
-## Project: Innowhyte Data Analysis Chat
+## Project: Conversational Data Analysis Chat
 
 ### Milestone 1: Discovery & Planning
 - [x] Inspect all 8 CSV files in `Online Shop 2024` (59,206 rows).

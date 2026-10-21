@@ -1,1 +1,1 @@
-# Innowhyte app package
+# App package

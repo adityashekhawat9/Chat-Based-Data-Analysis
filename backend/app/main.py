@@ -5,7 +5,7 @@ from backend.app.api.chat import router as chat_router
 from backend.app.api.chat_stream import router as chat_stream_router
 
 app = FastAPI(
-    title="Innowhyte Data Analysis API",
+    title="Conversational Data Analysis API",
     description="Backend API for Chat-Based Multi-CSV Data Analysis",
     version="1.0.0",
 )

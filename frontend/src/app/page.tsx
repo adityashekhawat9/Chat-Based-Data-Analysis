@@ -39,15 +39,15 @@ export default function Home() {
 
   useEffect(() => {
     // Generate or restore session ID
-    let currentSession = localStorage.getItem("innowhyte_session_id");
+    let currentSession = localStorage.getItem("data_analysis_session_id");
     if (!currentSession) {
       currentSession = `sess_${Math.random().toString(36).substring(2, 10)}_${Date.now()}`;
-      localStorage.setItem("innowhyte_session_id", currentSession);
+      localStorage.setItem("data_analysis_session_id", currentSession);
     }
     setSessionId(currentSession);
 
     // Restore tenant ID
-    const savedTenant = localStorage.getItem("innowhyte_tenant_id") || "default_tenant";
+    const savedTenant = localStorage.getItem("data_analysis_tenant_id") || "default_tenant";
     setTenantId(savedTenant);
     if (!PRESET_TENANTS.some((t) => t.id === savedTenant)) {
       setIsCustomTenant(true);
@@ -78,7 +78,7 @@ export default function Home() {
 
   const handleTenantChange = (newTenant: string) => {
     setTenantId(newTenant);
-    localStorage.setItem("innowhyte_tenant_id", newTenant);
+    localStorage.setItem("data_analysis_tenant_id", newTenant);
     if (sessionId) {
       fetchRegisteredDatasets(sessionId, newTenant);
     }
@@ -117,7 +117,7 @@ export default function Home() {
 
   const handleNewSession = () => {
     const newSession = `sess_${Math.random().toString(36).substring(2, 10)}_${Date.now()}`;
-    localStorage.setItem("innowhyte_session_id", newSession);
+    localStorage.setItem("data_analysis_session_id", newSession);
     setSessionId(newSession);
     setDatasets([]);
   };
@@ -133,7 +133,7 @@ export default function Home() {
             </div>
             <div>
               <h1 className="text-base font-bold tracking-tight text-white flex items-center gap-2">
-                Innowhyte Data Analysis Chat
+                Data Analysis Chat
                 <span className="text-[10px] font-semibold uppercase tracking-wider bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">
                   PoC
                 </span>
