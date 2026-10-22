@@ -68,13 +68,21 @@
 - [x] Removed floating **Jump to latest** button and scroll handlers from `frontend/src/components/ChatInterface.tsx` to eliminate UI obstruction and overlap.
 - [x] Verified zero breakage of Executive Overview, KPI cards, Tabular Breakdown, dynamic Recharts chart, Grounding badges, TypeScript types, and Next.js production build (`npm run build`).
 
+### Milestone 11: Comprehensive README Documentation Sync
+- [x] Updated Table of Contents and section anchor links in `README.md`.
+- [x] Documented the dedicated Grounding Verification & Claims Audit Tray (`Audit N Claims`) and header verification badge.
+- [x] Documented the decoupling of technical DuckDB SQL execution traces to backend structured JSONL telemetry (`trace_id`).
+- [x] Documented the Multi-File Batch Ingestion Queue (`POST /api/datasets/register-batch`), sequential worker, and status states.
+- [x] Documented the 5 real-world Break Vector defenses in Subsystem 4.
+- [x] Synchronized test coverage breakdown to all 57 automated tests across 12 test modules.
+
 ---
 
 ## Executed Verification & Test Status
 
 ### Backend Automated Test Suite
 - **Command:** `.venv/bin/python -m pytest -v tests/`
-- **Result:** **42 passed, 0 failed** in 57.20s
+- **Result:** **57 passed** across 12 test suites
 - **Verified Scenarios:**
   1. `test_sql_guardrails_read_only` (PASSED)
   2. `test_chat_without_datasets` (PASSED)
@@ -132,6 +140,7 @@
   54. `test_break_vector_4_large_csv_field_does_not_crash` (PASSED)
   55. `test_break_vector_5_reserved_sql_keywords_sanitized` (PASSED)
   56. `test_break_vector_5_cross_session_table_overwrite_prevented` (PASSED)
+  57. `test_register_batch_datasets` (PASSED)
 
 ### Frontend Production Build
 - **Command:** `npm run build` in `frontend/`

@@ -13,13 +13,13 @@ An enterprise-grade, conversational data analysis application that allows busine
    - [The Deterministic Solution: Numerical Analysis & Guardrails](#13-the-deterministic-solution-numerical-analysis--guardrails)
 2. [How the System Works](#2-how-the-system-works)
    - [High-Level Architecture Diagram](#21-high-level-architecture-diagram)
-   - [Subsystem 1: Resumable Chunked Multipart Ingestion](#22-subsystem-1-resumable-chunked-multipart-ingestion)
+   - [Subsystem 1: Batch Upload Queue & Resumable Chunked Ingestion](#22-subsystem-1-batch-upload-queue--resumable-chunked-ingestion)
    - [Subsystem 2: Pre-flight Hygiene & Validation](#23-subsystem-2-pre-flight-hygiene--validation)
    - [Subsystem 3: Physical Multi-Tenant DuckDB Catalog](#24-subsystem-3-physical-multi-tenant-duckdb-catalog)
-   - [Subsystem 4: Semantic Query Planning & Read-Only Guardrails](#25-subsystem-4-semantic-query-planning--read-only-guardrails)
+   - [Subsystem 4: Semantic Query Planning & Break Vector Guardrails](#25-subsystem-4-semantic-query-planning--break-vector-guardrails)
    - [Subsystem 5: Server-Sent Events (SSE) Streaming Pipeline](#26-subsystem-5-server-sent-events-sse-streaming-pipeline)
    - [Subsystem 6: Executive Dashboard Card UI & Clean NLP Typography](#27-subsystem-6-executive-dashboard-card-ui--clean-nlp-typography)
-   - [Subsystem 7: Grounding Verification, Audit Tracing & Crash Recovery](#28-subsystem-7-grounding-verification-audit-tracing--crash-recovery)
+   - [Subsystem 7: Grounding Verification, Telemetry & Crash Recovery](#28-subsystem-7-grounding-verification-telemetry--crash-recovery)
 3. [Setup & Running the Project](#3-setup--running-the-project)
    - [Prerequisites](#31-prerequisites)
    - [Environment Variables Configuration](#32-environment-variables-configuration)
@@ -65,7 +65,7 @@ The platform enforces a strict separation of concerns:
 - **Zero Arbitrary Code Execution:** Zero Python `exec()` or `eval()`. All analytical calculations are performed inside an embedded, vectorized relational engine (**DuckDB**) using strictly validated, read-only ANSI-SQL (`SELECT` and `WITH` only).
 - **100% Deterministic Grounding:** The LLM (Groq `openai/gpt-oss-120b`) is utilized exclusively for semantic query planning (mapping natural language questions to SQL) and grounded narrative summarization. Every figure, percentage, or currency amount cited in the output is cross-referenced against raw DuckDB query results.
 - **Strict Read-Only Guardrails & Polite Intent Interception:** Mutating actions (`DELETE`, `DROP`, `TRUNCATE`, `ALTER`, `UPDATE`, `EDIT`, `REMOVE`, `INSERT`) are intercepted before reaching the database, returning a polite apology and helpful guidance on read-only analytical views.
-- **Executive Dashboard UI:** The user interface transforms raw tabular output into an executive brief featuring dynamic KPI cards, clean NLP typography, styled dark-mode tables, multi-series Recharts visualizations, and audit transparency drawers.
+- **Executive Dashboard UI:** The user interface transforms raw tabular output into an executive brief featuring dynamic KPI cards, clean NLP typography, styled dark-mode tables, multi-series Recharts visualizations, and a deterministic Grounding & Claims Audit Tray. Technical SQL code and runtime traces are decoupled from business presentation and captured in backend telemetry.
 
 ---
 
@@ -78,13 +78,12 @@ The platform enforces a strict separation of concerns:
 |                               Next.js 16 Frontend (TypeScript)                         |
 |                                                                                         |
 |  +--------------------+   +-----------------------+   +------------------------------+  |
-|  | Resumable Chunked  |   |  Data Quality Preview |   | Executive Dashboard Card     |  |
-|  | Upload (5MB slices)|   |  (Errors & Warnings)  |   | - Executive Overview Box     |  |
+|  | Batch Upload Queue |   |  Data Quality Preview |   | Executive Dashboard Card     |  |
+|  | (Multi-file & 5MB) |   |  (Errors & Warnings)  |   | - Executive Overview Box     |  |
 |  +--------------------+   +-----------------------+   | - Primary KPI Metric Cards   |  |
-|                                                       | - Strategic Insights Grid    |  |
 |                                                       | - Structured Tabular Table   |  |
 |                                                       | - Dynamic Chart (Recharts)   |  |
-|                                                       | - Grounding & SQL Audit Tray |  |
+|                                                       | - Grounding & Claims Audit   |  |
 |                                                       +------------------------------+  |
 +--------------------------------------------|--------------------------------------------+
                                              | HTTP REST (JSON / Multipart / SSE Stream)
@@ -95,8 +94,9 @@ The platform enforces a strict separation of concerns:
 |  └── X-Tenant-ID Header -> Physical Tenant Isolation (/data/tenants/{tenant_id}/)       |
 |                                                                                         |
 |  [ Ingestion & Validation Pipeline ]                                                    |
+|  ├── BatchQueueService    -> Multi-file drag-drop, atomic batch registration            |
 |  ├── ChunkedUploadService -> Resumable 5MB chunks, status recovery, file assembly       |
-|  ├── FileValidator        -> Format, Size (1GB), Encoding, Script/Formula Injection     |
+|  ├── FileValidator        -> Format, Size (1GB), Encoding, Full-stream Injection Check  |
 |  ├── SchemaProfiler       -> Raw Headers, Duplicates, Empties, Type Inference           |
 |  ├── DataQualityChecker   -> Index Cols, Empty Cols, Duplicate Rows, Mixed Types        |
 |  └── DatasetRegistry      -> SHA-256 Hashing, UUID, TOCTOU Prevention, Restart Recovery |
@@ -108,21 +108,28 @@ The platform enforces a strict separation of concerns:
 |  ├── Groq API (openai/gpt-oss-120b)        |                                            |
 |  │   ├── Semantic Intent & SQL Planner     |                                            |
 |  │   └── Grounded Narrative Synthesizer    |                                            |
-|  ├── SQLGuardrails                         |                                            |
+|  ├── SQLGuardrails (Break Vector Defenses) |                                            |
 |  │   ├── Mutation Intent Interception      -> Polite Generic Refusal & Helpful Guidance |
-|  │   └── Strict Read-Only AST Validation   -> Rejects DROP, DELETE, ALTER, UPDATE       |
+|  │   ├── Strict Read-Only AST Validation   -> Rejects DROP, DELETE, ALTER, UPDATE       |
+|  │   ├── Table Function & Path Blocking    -> Blocks read_csv, read_text, glob          |
+|  │   ├── Quote-Aware Semicolon Parsing     -> Allows semicolons inside string literals  |
+|  │   └── Memory & Result Clamping          -> LIMIT 1000 & cursor.fetchmany(1001)       |
 |  ├── GroundingValidator                    -> Precision Grounding Score & Table Recall  |
-|  └── TracingService                        -> JSONL Structured Trace Logging            |
+|  └── TracingService                        -> JSONL Structured Trace Logging (trace_id) |
 +-----------------------------------------------------------------------------------------+
 ```
 
-### 2.2 Subsystem 1: Resumable Chunked Multipart Ingestion
-Uploading large multi-megabyte or gigabyte files over public networks frequently suffers from dropped connections. Restarting an entire upload from byte zero wastes bandwidth and causes user drop-off.
-- **Client-Side Slicing:** The frontend (`CsvUploader.tsx`) slices files into fixed 5MB chunks using `File.slice()`.
-- **Initialization (`/api/datasets/upload/init`):** Pre-registers the upload with file size, total chunks, and computed client metadata.
-- **Sequential Chunk Upload (`/api/datasets/upload/chunk`):** Sends chunks labeled with `chunk_index`. Chunks are written to disk under `data/tenants/{tenant_id}/chunks/{upload_id}/`.
-- **Status Recovery (`/api/datasets/upload/status`):** If a network disconnect occurs, the client queries the server for uploaded chunk indices and resumes from the exact missing slice.
-- **Assembly & Verification (`/api/datasets/upload/complete`):** Stitches chunks on disk into a contiguous file, computes the SHA-256 content digest, and submits it to pre-flight hygiene validation.
+### 2.2 Subsystem 1: Batch Upload Queue & Resumable Chunked Ingestion
+Uploading large multi-megabyte or gigabyte files over public networks frequently suffers from dropped connections and multi-file coordination friction.
+- **Multi-File Selection & Drag-and-Drop:** Users can drag-and-drop multiple CSV files or select batches via native file selection (`<input multiple />`).
+- **Visual Ingestion Queue (`CsvUploader.tsx`):** Displays real-time progress for each file in the batch with discrete lifecycle states (`queued`, `uploading`, `validating`, `validated`, `blocked`, `registering`, `registered`, `failed`).
+- **Sequential Ingestion Worker:** Processes files sequentially to avoid DuckDB single-writer file lock contention (`Conflicting lock is held`).
+- **Atomic Batch Registration (`/api/datasets/register-batch`):** Once all files in the batch pass pre-flight validation, an atomic registration transaction registers them into the tenant DuckDB catalog with cryptographic SHA-256 verification.
+- **Client-Side Slicing (Large Files):** Large individual files (>5MB) are sliced into 5MB chunks using `File.slice()`.
+- **Initialization (`/api/datasets/upload/init`):** Pre-registers the upload with file size, total chunks, and client metadata.
+- **Sequential Chunk Upload (`/api/datasets/upload/chunk`):** Sends chunks labeled with `chunk_index` to disk under `data/tenants/{tenant_id}/chunks/{upload_id}/`.
+- **Status Recovery (`/api/datasets/upload/status`):** If a disconnect occurs, the client queries for uploaded chunk indices and resumes from the exact missing slice.
+- **Assembly & Verification (`/api/datasets/upload/complete`):** Stitches chunks into a contiguous file, computes SHA-256 digest, and submits to pre-flight validation.
 
 ### 2.3 Subsystem 2: Pre-flight Hygiene & Validation
 Before uploaded data is registered into DuckDB, it passes through four decoupled validation layers:
@@ -143,7 +150,7 @@ Enterprise environments require strict data segregation between different client
 - Cross-tenant queries are impossible: tables registered in Tenant A cannot be seen, queried, or joined by Tenant B.
 - When the backend restarts, the catalog recovers state from the local tenant DuckDB database and metadata JSON records.
 
-### 2.5 Subsystem 4: Semantic Query Planning & Read-Only Guardrails
+### 2.5 Subsystem 4: Semantic Query Planning & Break Vector Guardrails
 1. **Schema Introspection:** Dynamically generates DuckDB catalog summaries (table names, column types, row counts, and sample row tuples) to inform the LLM planner.
 2. **Temporal & Business Boundary Anchoring:**
    - The ecommerce dataset spans November 5, 2023 through November 4, 2024.
@@ -152,11 +159,16 @@ Enterprise environments require strict data segregation between different client
 3. **Read-Only AST Guardrails (`sql_guardrails.py`):**
    - The query must begin with `SELECT` or `WITH`.
    - Prohibits mutating keywords: `DROP`, `DELETE`, `UPDATE`, `INSERT`, `ALTER`, `CREATE`, `TRUNCATE`, `EXEC`, `PRAGMA`, `GRANT`, `REVOKE`.
-   - Prohibits semicolon chaining (e.g. `; DROP TABLE orders;`).
    - Automatically appends `LIMIT 500` to unbound queries without aggregations.
 4. **Polite Mutation Intent Interception:**
    - If a user prompts: *"delete customer 177"*, *"drop table orders"*, or *"edit the status to completed"*, the intent is caught upfront before query planning.
    - Returns a polite apology explaining the read-only mode and suggesting analytical alternatives (filtering out records, aggregating, comparing). Zero mutating SQL is output.
+5. **Real-World Break Vector Hardening:**
+   - **Filesystem Exfiltration Defense:** Blocks DuckDB table-producing functions (`read_csv`, `read_text`, `read_parquet`, `read_json`, `glob`, `scan_*`) and direct file path queries in `SQLGuardrails` to prevent host file inspection.
+   - **Quote-Aware Semicolon Parsing:** Tokenizes SQL with stateful quote tracking (`'...'` and `"..."`), ensuring valid queries filtering on text containing semicolons or keywords are never falsely rejected.
+   - **Memory Exhaustion & Result Clamping:** Hard-clamps queries with excessive limits to `MAX_RESULT_LIMIT = 1000`, enforces automatic limits on `GROUP BY` queries, and bounds DuckDB execution in `llm_service.py` via `cursor.fetchmany(1001)` to prevent memory exhaustion (OOM).
+   - **Full-Stream Ingestion Security:** Scans the entire file stream for script tags (`<script>`) and formula commands (`=cmd|...`) past row 500, with expanded `csv.field_size_limit(sys.maxsize)` to safely handle large multi-line text fields.
+   - **Table Name Sanitization & Cross-Session Conflict Defense:** Normalizes candidate table names, prefixes SQL reserved keywords (`order`, `group`, `user`), and auto-disambiguates table names across sessions to prevent silent table overwrites.
 
 ### 2.6 Subsystem 5: Server-Sent Events (SSE) Streaming Pipeline
 Real-time interaction is achieved over HTTP using Server-Sent Events (`POST /api/chat/stream`):
@@ -171,21 +183,27 @@ Real-time interaction is achieved over HTTP using Server-Sent Events (`POST /api
 
 ### 2.7 Subsystem 6: Executive Dashboard Card UI & Clean NLP Typography
 Instead of generic bullet points or raw markdown text, responses are displayed in an executive dashboard format:
-- **Executive Overview Box:** Highlights the core takeaway in clean typography.
+- **Card Header Bar:** Displays the Executive Analysis Brief title, request `trace_id`, and a visual `Grounded in DuckDB` verification badge.
+- **Executive Overview Box:** Highlights the core analytical synthesis in high-contrast clean typography.
 - **Clean NLP Text Renderer:** Uses regex tokenization to transform `**bold**` markdown into styled HTML `<strong>` nodes, removes raw asterisks, eliminates escape backslashes (`\*`), and formats inline code pills.
-- **Key Performance Indicator (KPI) Grid:** Displays 1 to 4 metric cards with auto-detected currency formatting (`$XX,XXX.XX`), numeric formatting, and domain icons.
-- **Strategic Insights Grid:** Highlights key analytical observations, category dominance, and percentage shares.
+- **Key Performance Indicator (KPI) Grid:** Displays 1 to 4 metric cards with auto-detected currency formatting (`$XX,XXX.XX`), numeric formatting, and domain icons (revenue, trends, orders, completions).
 - **Structured Tabular Breakdown:** Detects markdown pipe tables (`| Month | Total Sales |`), automatically aligns numbers and currencies to the right in emerald green typography, aligns text to the left, and renders trailing footnotes as clean warning captions.
 - **Dynamic Multi-Series Charts:** Powered by **Recharts**:
   - Automatically discovers all numeric series columns.
   - Performs client-side and backend auto-pivoting for two-factor groupings (e.g. plotting 2023 vs 2024 side-by-side per product category).
   - Y-axis ticks scale automatically to `$1.0M`, `$500k`, etc.
+- **Streaming Viewport Anchoring (UX):** Anchors the chat viewport smoothly to the top of the current message exchange as tokens stream in. This ensures users can read responses from the very first word without disorienting auto-scroll jumps to the bottom.
 
-### 2.8 Subsystem 7: Grounding Verification, Audit Tracing & Crash Recovery
+### 2.8 Subsystem 7: Grounding Verification, Telemetry & Crash Recovery
 - **Grounding Evaluation:** Regex extracts all numbers and dollar amounts from the LLM narrative, verifying that each number matches a value in the DuckDB result set within a 3% rounding tolerance.
+- **Grounding & Claims Audit Tray:** Positioned at the base of the Executive Dashboard Card, providing:
+  - Numerical Grounding Precision score pill (`98% Grounded in Data` / `ShieldCheck`).
+  - Table Recall percentage pill (`Table Recall: 100%`).
+  - Feasibility status indicator (`Feasible Query`).
+  - Interactive Claims Audit toggle (`Audit N Claims`), which expands to inspect individual verified numerical values cited in the narrative and calculation notes.
+- **Decoupled Technical Tracing:** Raw DuckDB SQL queries, execution runtimes, row counts, and data preview snapshots are decoupled from the user-facing executive card and logged to structured JSONL trace files via unique `trace_id` for backend observability and auditing.
 - **Table Recall:** Evaluates whether the planner joined all necessary tables required to answer the query.
-- **Audit Tracing:** Generates a unique `trace_id` for each request and logs step latencies and errors to structured JSONL files.
-- **SQL Audit Drawer:** Allows users to inspect the deterministic SQL query, copy it to the clipboard, and review execution duration.
+- **Crash Recovery:** Local tenant DuckDB databases and metadata JSON files persist across server restarts, ensuring sessions and datasets remain accessible without re-uploading.
 
 ---
 
@@ -275,16 +293,17 @@ docker compose up --build
 
 #### Backend Test Suite (pytest)
 ```bash
-# Run all 42 automated tests:
+# Run all 57 automated tests:
 .venv/bin/python -m pytest -v tests/
 ```
-**Test Coverage Breakdown (42/42 Passing):**
+**Test Coverage Breakdown (57/57 Passing):**
+- `test_break_vectors.py` (14 tests): Filesystem exfiltration blocking, quote-aware semicolon parsing, memory exhaustion & limit clamping, full-stream injection scanning, and cross-session table conflict prevention.
+- `test_dataset_api.py` (10 tests): Registration, atomic batch registration (`/register-batch`), zero-byte screening, script injection, deduplication, TOCTOU defense, session listing.
 - `test_unauthorized_permissions.py` (2 tests): Mutation intent detection and polite refusal handling.
 - `test_chat_query.py` (5 tests): Read-only guardrails, multi-table joins, category sales, geographic grouping.
 - `test_chat_stream.py` (1 test): SSE event sequence and live token streaming.
 - `test_chunked_upload.py` (1 test): 5MB chunk slicing, status recovery, file assembly.
 - `test_data_quality.py` (6 tests): Empty columns, index columns, duplicate rows, missing rates, mixed types.
-- `test_dataset_api.py` (9 tests): Registration, zero-byte screening, script injection, deduplication, TOCTOU defense.
 - `test_file_validator.py` (8 tests): Size bounds (1GB), formula injection, encoding detection.
 - `test_grounding_evaluator.py` (3 tests): Precision grounding, hallucination flagging, query feasibility.
 - `test_multi_tenancy.py` (2 tests): Physical DuckDB catalog isolation, path traversal rejection.
@@ -310,6 +329,7 @@ Verifies TypeScript compilation, zero lint warnings, and Next.js page generation
 | `POST` | `/api/datasets/upload/complete` | Assembles chunks, verifies SHA-256, runs hygiene validation |
 | `POST` | `/api/datasets/validate` | Pre-flight validation on uploaded CSV bytes |
 | `POST` | `/api/datasets/register` | Registers validated staged dataset into DuckDB catalog |
+| `POST` | `/api/datasets/register-batch` | Atomically registers multiple validated datasets into DuckDB catalog |
 | `GET` | `/api/datasets/sessions/{session_id}` | Lists all registered tables and schemas in session |
 | `POST` | `/api/datasets/load-sample` | Preloads 8 ecommerce CSV tables into tenant catalog |
 | `POST` | `/api/chat` | Synchronous analytical query execution |
