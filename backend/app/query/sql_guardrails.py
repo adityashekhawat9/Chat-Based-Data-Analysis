@@ -1,6 +1,8 @@
 import re
 from typing import Tuple, Optional
 
+from backend.app.query.nlp_guardrails import NLPGuardrails, MAX_USER_MESSAGE_LENGTH
+
 # Prohibited mutating statements & system operations
 DISALLOWED_KEYWORDS = [
     r"\bDROP\b",
@@ -28,6 +30,15 @@ DISALLOWED_KEYWORDS = [
 ]
 DISALLOWED_REGEX = re.compile("|".join(DISALLOWED_KEYWORDS), re.IGNORECASE)
 
+# Prohibited internal system metadata and diagnostic functions
+DISALLOWED_SYSTEM_FUNCTIONS = [
+    r"\bduckdb_[a-zA-Z0-9_]+\b",
+    r"\bpragma_[a-zA-Z0-9_]+\b",
+    r"\bcurrent_setting\b",
+    r"\b(?:current_user|session_user)\s*\(\s*\)",
+]
+DISALLOWED_SYSTEM_REGEX = re.compile("|".join(DISALLOWED_SYSTEM_FUNCTIONS), re.IGNORECASE)
+
 # Dangerous filesystem and external-access table functions
 EXTERNAL_ACCESS_KEYWORDS = [
     r"\bread_(?:csv|csv_auto|parquet|json|json_auto|text|blob)\b",
@@ -54,6 +65,10 @@ FILESYSTEM_ACCESS_REFUSAL = (
     "You may only query registered tables in your dataset catalog."
 )
 
+SYSTEM_METADATA_ACCESS_REFUSAL = (
+    "I apologize, but access to internal database system settings, secrets, and diagnostic functions is prohibited."
+)
+
 # User-intent patterns for data mutation / modification
 MUTATION_INTENT_PATTERNS = [
     r"\b(delete|remove|erase|purge)\b.*\b(from|table|row|record|customer|order|item|entry|entries|data)\b",
@@ -76,11 +91,12 @@ class SQLGuardrails:
     @staticmethod
     def is_mutation_intent(message: str) -> bool:
         """
-        Detects if user natural language message is attempting data mutation or deletion.
+        Detects if user natural language message is attempting data mutation or deletion,
+        using spaCy semantic NLP analysis with regex safety fallback.
         """
         if not message:
             return False
-        return bool(MUTATION_INTENT_REGEX.search(message.strip()))
+        return NLPGuardrails.analyze_mutation_intent(message)
 
     @staticmethod
     def clean_sql(raw_sql: str) -> str:
@@ -121,6 +137,10 @@ class SQLGuardrails:
         # 3. Check for external file system access & table functions (Vector 1)
         if EXTERNAL_ACCESS_REGEX.search(stripped) or FILESYSTEM_PATH_REGEX.search(cleaned):
             raise SQLGuardrailError(FILESYSTEM_ACCESS_REFUSAL)
+
+        # 4. Check for internal DuckDB system & metadata functions (Vector 4)
+        if DISALLOWED_SYSTEM_REGEX.search(stripped):
+            raise SQLGuardrailError(SYSTEM_METADATA_ACCESS_REFUSAL)
 
         # 4. Check for prohibited mutating keywords outside string literals (Vector 2)
         match = DISALLOWED_REGEX.search(stripped)

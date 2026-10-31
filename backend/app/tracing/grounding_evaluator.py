@@ -88,13 +88,28 @@ class GroundingValidator:
                     # Also add integer representation
                     ground_truth_numbers.add(int(v))
 
+        # Extract date/time entity spans from narrative using spaCy NER to avoid penalizing dates as metric claims
+        date_spans: List[Tuple[int, int]] = []
+        try:
+            from app.query.nlp_guardrails import NLPGuardrails
+            entities = NLPGuardrails.extract_semantic_entities(narrative)
+            for ent in entities:
+                if ent.get("label") in ("DATE", "TIME"):
+                    date_spans.append((ent["start"], ent["end"]))
+        except Exception:
+            date_spans = []
+
         # Extract numerical tokens from narrative
         matches = cls.NUMBER_PATTERN.finditer(narrative)
         claims = []
         for m in matches:
+            start, end = m.span()
+            # If this numeric token is part of a DATE or TIME entity, ignore it
+            if any(s <= start and end <= e for s, e in date_spans):
+                continue
             raw = m.group(0).strip()
-            # Ignore standard calendar years like 2023, 2024
-            if raw in ("2023", "2024", "2025", "2026", "1", "2"):
+            # Ignore standard calendar years and small rank numbers
+            if raw in ("2020", "2021", "2022", "2023", "2024", "2025", "2026", "2027", "2028", "1", "2"):
                 continue
             claims.append(raw)
 

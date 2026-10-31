@@ -76,71 +76,39 @@
 - [x] Documented the 5 real-world Break Vector defenses in Subsystem 4.
 - [x] Synchronized test coverage breakdown to all 57 automated tests across 12 test modules.
 
+### Milestone 12: NLP Semantic Security Hardening & Vulnerability Remediation
+- [x] **Threat Modeling & Hardening Architecture:** Modeled 8 real-world query vulnerability vectors (V1-V8) including semantic intent evasion, false-positive analytical interrogatives, direct prompt injection, DuckDB system exfiltration, ReDoS/DoS buffer flooding, indirect stored-data injection, verbose error disclosure, and date/time grounding imprecision.
+- [x] **spaCy Dependency & Pipeline Integration:** Integrated spaCy NLP engine (`en_core_web_sm` / `spacy.blank("en")` fallback) in `backend/app/query/nlp_guardrails.py` with singleton model management.
+- [x] **Vector 1 & 2: Semantic Intent Classification & Voice Analysis:** Replaced brittle regex with lemma-based dependency parsing over 28 destructive action lemmas. Analyzed grammatical voice (`auxpass`), adjectival participle clauses (`acl`, `amod`), and interrogative cues (`which`, `what`, `how many`, `show`, `list`) to distinguish actual destructive intent from legitimate historical queries.
+- [x] **Vector 3: Prompt Injection Defense & Sandboxing:** Implemented pre-flight pattern screening against system overrides and jailbreaks (`DAN mode`, `developer mode`, system prompt leakage), coupled with XML prompt sandboxing (`<active_database_schema>`, `<untrusted_user_query>`, etc.) in `prompt_builder.py`.
+- [x] **Vector 4: DuckDB Internal System & Metadata Protection:** Blocked all internal functions and pragmas (`duckdb_*`, `pragma_*`, `current_setting`, `current_user`) in `sql_guardrails.py` to prevent environment exfiltration.
+- [x] **Vector 5: Buffer Flooding & ReDoS Prevention:** Implemented 1,000-character input length boundaries and DuckDB `statement_timeout = '15s'` against complex execution DoS.
+- [x] **Vector 6 & 7: Stored-Data Boundary Sandboxing & Error Sanitization:** Sanitized database exceptions to scrub host filesystem paths, Python traceback lines, and hexadecimal memory addresses before returning to users.
+- [x] **Vector 8: Semantic Entity Recognition in Grounding:** Leveraged spaCy NER to isolate `DATE` and `TIME` entities in narratives, preventing false-positive hallucination penalties on calendar years in `grounding_evaluator.py`.
+- [x] **Comprehensive Automated Test Suite:** Created `tests/test_nlp_security.py` with 38 unit and integration tests covering all 8 threat vectors (100% passing).
+- [x] **Full Regression Verification:** Verified entire test suite (95 passed, 0 failed in 73.2s) and Next.js production build (`npm run build`).
+
 ---
 
 ## Executed Verification & Test Status
 
 ### Backend Automated Test Suite
-- **Command:** `.venv/bin/python -m pytest -v tests/`
-- **Result:** **57 passed** across 12 test suites
-- **Verified Scenarios:**
-  1. `test_sql_guardrails_read_only` (PASSED)
-  2. `test_chat_without_datasets` (PASSED)
-  3. `test_load_sample_dataset_and_chat_monthly_trend` (PASSED)
-  4. `test_chat_cross_table_category_sales` (PASSED)
-  5. `test_chat_geographic_distribution` (PASSED)
-  6. `test_chat_stream_sse_flow` (PASSED)
-  7. `test_chunked_resumable_upload_flow` (PASSED)
-  8. `test_clean_data_no_warnings` (PASSED)
-  9. `test_fully_empty_column` (PASSED)
-  10. `test_likely_index_column` (PASSED)
-  11. `test_duplicate_rows` (PASSED)
-  12. `test_high_missing_rate` (PASSED)
-  13. `test_mixed_types` (PASSED)
-  14. `test_validate_and_register_valid_csv` (PASSED)
-  15. `test_validate_zero_byte_file` (PASSED)
-  16. `test_validate_script_injection` (PASSED)
-  17. `test_identical_content_uploaded_under_different_filenames` (PASSED)
-  18. `test_different_content_uploaded_under_same_filename` (PASSED)
-  19. `test_repeated_registration_within_session` (PASSED)
-  20. `test_attempts_to_register_rejected_dataset` (PASSED)
-  21. `test_toctou_prevention_unknown_hash` (PASSED)
-  22. `test_session_datasets_listing` (PASSED)
-  23. `test_valid_csv` (PASSED)
-  24. `test_zero_byte_empty_file` (PASSED)
-  25. `test_header_only_file` (PASSED)
-  26. `test_file_size_limit` (PASSED)
-  27. `test_unsupported_format` (PASSED)
-  28. `test_invalid_encoding` (PASSED)
-  29. `test_script_tag_injection` (PASSED)
-  30. `test_formula_injection` (PASSED)
-  31. `test_grounding_precision_fully_grounded` (PASSED)
-  32. `test_grounding_precision_hallucinated_claim` (PASSED)
-  33. `test_feasibility_check` (PASSED)
-  34. `test_multi_tenant_isolation` (PASSED)
-  35. `test_tenant_id_traversal_rejection` (PASSED)
-  36. `test_duckdb_and_metadata_persistence_across_restart` (PASSED)
-  37. `test_valid_schema` (PASSED)
-  38. `test_empty_column_header` (PASSED)
-  39. `test_duplicate_column_headers` (PASSED)
-  40. `test_identifier_normalization` (PASSED)
-  41. `test_mutation_intent_regex_coverage` (PASSED)
-  42. `test_api_chat_returns_polite_refusal_for_mutations` (PASSED)
-  43. `test_break_vector_1_read_csv_table_function_blocked` (PASSED)
-  44. `test_break_vector_1_read_text_and_glob_blocked` (PASSED)
-  45. `test_break_vector_2_semicolon_inside_string_literal_allowed` (PASSED)
-  46. `test_break_vector_2_mutating_keyword_inside_string_literal_allowed` (PASSED)
-  47. `test_break_vector_2_actual_multiple_statements_still_blocked` (PASSED)
-  48. `test_break_vector_3_massive_limit_clamped` (PASSED)
-  49. `test_break_vector_3_group_by_auto_limit` (PASSED)
-  50. `test_break_vector_3_scalar_count_preserved` (PASSED)
-  51. `test_break_vector_3_fetchmany_bounds_memory` (PASSED)
-  52. `test_break_vector_4_script_injection_on_row_501_blocked` (PASSED)
-  53. `test_break_vector_4_formula_injection_on_row_600_blocked` (PASSED)
-  54. `test_break_vector_4_large_csv_field_does_not_crash` (PASSED)
-  55. `test_break_vector_5_reserved_sql_keywords_sanitized` (PASSED)
-  56. `test_break_vector_5_cross_session_table_overwrite_prevented` (PASSED)
-  57. `test_register_batch_datasets` (PASSED)
+- **Command:** `PYTHONPATH=. .venv/bin/pytest tests/`
+- **Result:** **95 passed** across 13 test suites (100% pass rate)
+- **Verified Suites:**
+  1. `tests/test_break_vectors.py` (14 passed)
+  2. `tests/test_chat_query.py` (5 passed)
+  3. `tests/test_chat_stream.py` (1 passed)
+  4. `tests/test_chunked_upload.py` (1 passed)
+  5. `tests/test_data_quality.py` (6 passed)
+  6. `tests/test_dataset_api.py` (10 passed)
+  7. `tests/test_file_validator.py` (8 passed)
+  8. `tests/test_grounding_evaluator.py` (3 passed)
+  9. `tests/test_multi_tenancy.py` (2 passed)
+  10. `tests/test_nlp_security.py` (38 passed)
+  11. `tests/test_persistence.py` (1 passed)
+  12. `tests/test_schema_profiler.py` (4 passed)
+  13. `tests/test_unauthorized_permissions.py` (2 passed)
 
 ### Frontend Production Build
 - **Command:** `npm run build` in `frontend/`

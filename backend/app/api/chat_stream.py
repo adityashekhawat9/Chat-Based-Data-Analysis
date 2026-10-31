@@ -13,6 +13,7 @@ from backend.app.tracing.tracer import TracingService
 from backend.app.tracing.grounding_evaluator import GroundingValidator
 from backend.app.query.prompt_builder import PromptBuilder
 from backend.app.query.sql_guardrails import SQLGuardrails, SQLGuardrailError, MUTATION_REFUSAL_MESSAGE
+from backend.app.query.nlp_guardrails import NLPGuardrails, PROMPT_INJECTION_REFUSAL_MESSAGE
 
 router = APIRouter(prefix="/api", tags=["chat_stream"])
 tracer = TracingService()
@@ -33,7 +34,47 @@ async def chat_stream_endpoint(
             detail="Message cannot be empty."
         )
 
-    # Check for unauthorized mutation/deletion intent upfront
+    # 1. Guard against buffer flooding / ReDoS (V5)
+    try:
+        NLPGuardrails.validate_message_length(req.message)
+    except ValueError as ve:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(ve)
+        )
+
+    # 2. Check for prompt injection / jailbreak attempts upfront (V3)
+    is_injection, injection_refusal = NLPGuardrails.detect_prompt_injection(req.message)
+    if is_injection:
+        trace = tracer.create_trace(tenant_id=tenant_id, session_id=req.session_id, operation="prompt_injection_refusal")
+        async def injection_stream() -> AsyncGenerator[str, None]:
+            trace.start_span("security_screening")
+            yield _format_sse("pipeline_step", {
+                "step": "security_screening",
+                "message": "Screening analytical request for safety & operational scope...",
+                "trace_id": trace.trace_id,
+            })
+            await asyncio.sleep(0.02)
+            trace.end_span("security_screening", status="success")
+
+            refusal_text = injection_refusal or PROMPT_INJECTION_REFUSAL_MESSAGE
+            words = refusal_text.split(" ")
+            for i, word in enumerate(words):
+                token = word + (" " if i < len(words) - 1 else "")
+                yield _format_sse("token", {"token": token, "trace_id": trace.trace_id})
+                await asyncio.sleep(0.01)
+
+            yield _format_sse("grounding", {
+                "grounding_precision": 1.0,
+                "hallucination_detected": False,
+                "table_recall": 1.0,
+                "trace_id": trace.trace_id,
+            })
+            yield _format_sse("done", {"trace_id": trace.trace_id})
+
+        return StreamingResponse(injection_stream(), media_type="text/event-stream")
+
+    # 3. Check for unauthorized mutation/deletion intent upfront (V1 & V2)
     if SQLGuardrails.is_mutation_intent(req.message):
         trace = tracer.create_trace(tenant_id=tenant_id, session_id=req.session_id, operation="permission_refusal")
         async def refusal_stream() -> AsyncGenerator[str, None]:

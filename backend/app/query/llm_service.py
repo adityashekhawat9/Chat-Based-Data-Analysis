@@ -14,6 +14,7 @@ from backend.app.models.chat import (
 )
 from backend.app.query.prompt_builder import PromptBuilder
 from backend.app.query.sql_guardrails import SQLGuardrails, SQLGuardrailError, MUTATION_REFUSAL_MESSAGE
+from backend.app.query.nlp_guardrails import NLPGuardrails, PROMPT_INJECTION_REFUSAL_MESSAGE
 
 GROQ_DEFAULT_MODEL = os.environ.get("GROQ_MODEL", os.environ.get("LLM_MODEL", "openai/gpt-oss-120b"))
 
@@ -49,7 +50,33 @@ class LLMService:
     ) -> ChatResponse:
         start_time = time.perf_counter()
 
-        # Check mutation intent before generating SQL plan
+        # 1. Guard against buffer flooding / ReDoS via message length validation (V5)
+        try:
+            NLPGuardrails.validate_message_length(user_message)
+        except ValueError as ve:
+            return ChatResponse(
+                session_id=session_id,
+                answer=str(ve),
+                sql_query="",
+                chart=None,
+                data_preview=[],
+                execution_metrics=ExecutionMetrics(execution_time_ms=0),
+                error=str(ve),
+            )
+
+        # 2. Check for prompt injection / jailbreak attempts (V3)
+        is_injection, injection_refusal = NLPGuardrails.detect_prompt_injection(user_message)
+        if is_injection:
+            return ChatResponse(
+                session_id=session_id,
+                answer=injection_refusal or PROMPT_INJECTION_REFUSAL_MESSAGE,
+                sql_query="",
+                chart=None,
+                data_preview=[],
+                execution_metrics=ExecutionMetrics(execution_time_ms=round((time.perf_counter() - start_time) * 1000, 2)),
+            )
+
+        # 3. Check mutation intent before generating SQL plan (V1 & V2)
         if SQLGuardrails.is_mutation_intent(user_message):
             return ChatResponse(
                 session_id=session_id,
@@ -94,14 +121,15 @@ class LLMService:
         # 3. Deterministic Execution in DuckDB with Self-Correction
         records, error = self._execute_with_retry(conn, sanitized_sql, catalog_schema, user_message)
         if error:
+            safe_error = NLPGuardrails.sanitize_database_error(error)
             return ChatResponse(
                 session_id=session_id,
-                answer=f"Could not execute query on dataset: {error}",
+                answer=f"Could not execute query on dataset: {safe_error}",
                 sql_query=sanitized_sql,
                 chart=None,
                 data_preview=[],
                 execution_metrics=ExecutionMetrics(execution_time_ms=round((time.perf_counter() - start_time) * 1000, 2)),
-                error=error,
+                error=safe_error,
             )
 
         query_duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
@@ -162,6 +190,11 @@ class LLMService:
             return self._heuristic_sql_fallback(user_message, catalog_schema)
 
     def _execute_to_records(self, conn: duckdb.DuckDBPyConnection, sql: str) -> List[Dict[str, Any]]:
+        # Enforce statement timeout to prevent Cartesian explosion DoS (V5)
+        try:
+            conn.execute("SET statement_timeout = '15s'")
+        except Exception:
+            pass
         cursor = conn.execute(sql)
         if not cursor.description:
             return []

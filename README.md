@@ -160,9 +160,14 @@ Enterprise environments require strict data segregation between different client
    - The query must begin with `SELECT` or `WITH`.
    - Prohibits mutating keywords: `DROP`, `DELETE`, `UPDATE`, `INSERT`, `ALTER`, `CREATE`, `TRUNCATE`, `EXEC`, `PRAGMA`, `GRANT`, `REVOKE`.
    - Automatically appends `LIMIT 500` to unbound queries without aggregations.
-4. **Polite Mutation Intent Interception:**
-   - If a user prompts: *"delete customer 177"*, *"drop table orders"*, or *"edit the status to completed"*, the intent is caught upfront before query planning.
-   - Returns a polite apology explaining the read-only mode and suggesting analytical alternatives (filtering out records, aggregating, comparing). Zero mutating SQL is output.
+4. **NLP Semantic Intent Classification & spaCy Security Guardrails (`nlp_guardrails.py`):**
+   - **Semantic Mutation Intent Analysis:** Replaces brittle keyword matching with spaCy syntactic dependency parsing across 28 mutation lemmas (`delete`, `obliterate`, `wipe`, `flush`, `expunge`, `annihilate`, `vanish`, `purge`, `truncate`, `alter`, etc.) governing database entities.
+   - **Grammatical Voice & Participle Disambiguation:** Differentiates malicious commands from legitimate analytical questions using passive voice (`auxpass`), adjectival participle clauses (`acl`, `amod`), and interrogative cues (`which`, `what`, `how many`, `show`, `list`). Queries like *"Which orders were deleted last year?"* or *"Show items removed from catalog"* are safely allowed.
+   - **Prompt Injection & Persona Hijacking Defense:** Upfront pre-flight screening blocks jailbreak prompts (`DAN mode`, `developer mode`, system prompt leakage) with immediate SSE refusal events and zero LLM invocations.
+   - **XML Boundary Sandboxing:** The prompt builder strictly isolates user inputs and database schemas within XML delimiter tags (`<active_database_schema>`, `<untrusted_user_query>`, `<conversation_history>`), preventing indirect data injection.
+   - **Internal System & Metadata Protection:** Enforces strict regex blocking on DuckDB internal functions and pragmas (`duckdb_*`, `pragma_*`, `current_setting`, `current_user`) to prevent environment and credential exfiltration.
+   - **Denial of Service (DoS) & Buffer Flooding:** User queries are capped at 1,000 characters, and DuckDB executions enforce `statement_timeout = '15s'`.
+   - **Database Error Sanitization:** Masks host paths (`[PATH]`), hex memory offsets (`[ADDR]`), and Python stack traces to prevent internal server reconnaissance.
 5. **Real-World Break Vector Hardening:**
    - **Filesystem Exfiltration Defense:** Blocks DuckDB table-producing functions (`read_csv`, `read_text`, `read_parquet`, `read_json`, `glob`, `scan_*`) and direct file path queries in `SQLGuardrails` to prevent host file inspection.
    - **Quote-Aware Semicolon Parsing:** Tokenizes SQL with stateful quote tracking (`'...'` and `"..."`), ensuring valid queries filtering on text containing semicolons or keywords are never falsely rejected.
@@ -293,22 +298,23 @@ docker compose up --build
 
 #### Backend Test Suite (pytest)
 ```bash
-# Run all 57 automated tests:
+# Run all 95 automated tests:
 .venv/bin/python -m pytest -v tests/
 ```
-**Test Coverage Breakdown (57/57 Passing):**
+**Test Coverage Breakdown (95/95 Passing):**
+- `test_nlp_security.py` (38 tests): Semantic mutation intent detection, passive/interrogative analytical queries, negated mutation handling, prompt injection and jailbreak defense, DuckDB internal function blocking, 1000-char buffer DoS limits, error message scrubbing, and spaCy date entity recognition in grounding.
 - `test_break_vectors.py` (14 tests): Filesystem exfiltration blocking, quote-aware semicolon parsing, memory exhaustion & limit clamping, full-stream injection scanning, and cross-session table conflict prevention.
 - `test_dataset_api.py` (10 tests): Registration, atomic batch registration (`/register-batch`), zero-byte screening, script injection, deduplication, TOCTOU defense, session listing.
-- `test_unauthorized_permissions.py` (2 tests): Mutation intent detection and polite refusal handling.
-- `test_chat_query.py` (5 tests): Read-only guardrails, multi-table joins, category sales, geographic grouping.
-- `test_chat_stream.py` (1 test): SSE event sequence and live token streaming.
-- `test_chunked_upload.py` (1 test): 5MB chunk slicing, status recovery, file assembly.
-- `test_data_quality.py` (6 tests): Empty columns, index columns, duplicate rows, missing rates, mixed types.
 - `test_file_validator.py` (8 tests): Size bounds (1GB), formula injection, encoding detection.
+- `test_data_quality.py` (6 tests): Empty columns, index columns, duplicate rows, missing rates, mixed types.
+- `test_chat_query.py` (5 tests): Read-only guardrails, multi-table joins, category sales, geographic grouping.
+- `test_schema_profiler.py` (4 tests): Header normalization, duplicate headers, empty headers.
 - `test_grounding_evaluator.py` (3 tests): Precision grounding, hallucination flagging, query feasibility.
 - `test_multi_tenancy.py` (2 tests): Physical DuckDB catalog isolation, path traversal rejection.
+- `test_unauthorized_permissions.py` (2 tests): Mutation intent detection and polite refusal handling.
+- `test_chat_stream.py` (1 test): SSE event sequence and live token streaming.
+- `test_chunked_upload.py` (1 test): 5MB chunk slicing, status recovery, file assembly.
 - `test_persistence.py` (1 test): Persistence across process reboots.
-- `test_schema_profiler.py` (4 tests): Header normalization, duplicate headers, empty headers.
 
 #### Frontend Production Build Verification
 ```bash
@@ -349,6 +355,7 @@ Verifies TypeScript compilation, zero lint warnings, and Next.js page generation
 | **Pydantic** | `^2.10` | Data Validation & Schemas | Strict type contracts for API requests, chart specifications, and error models. Guarantees deterministic serialization and JSON schema enforcement. |
 | **python-multipart** | `^0.0.12` | Multipart Ingestion | Enables memory-efficient chunked streaming of file uploads without loading full payloads into RAM. |
 | **pytest & HTTPX** | `^8.3` / `^0.28` | Automated Regression Suite | Asynchronous test client capable of testing SSE streams, file uploads, and DuckDB catalog state with tenant isolation. |
+| **spaCy** | `^3.8` | Semantic NLP & Guardrails | Industrial-strength natural language processing (`en_core_web_sm`). Performs syntactic dependency parsing, lemmatization, and grammatical voice/mood analysis to distinguish destructive mutations from analytical inquiries, detects prompt injection vectors, and performs NER on narrative claims. |
 
 ### 4.2 Frontend Technology Stack
 
